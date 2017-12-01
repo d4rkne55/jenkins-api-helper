@@ -30,20 +30,72 @@ class JenkinsHelper
      * This function runs the job specified
      *
      * @param string $jobName
+     * @return string
      */
     public function build($jobName)
     {
         $url = sprintf('%s/job/%s/build', $this->baseUrl, rawurlencode($jobName));
 
         curl_setopt($this->curlHandler, CURLOPT_POST, true);
+        curl_setopt($this->curlHandler, CURLOPT_HEADER, true);
 
-        $this->execute($url);
+        return $this->execute($url);
+    }
+
+    /**
+     * Returns data of the build with given number or being referenced by given queue item URL
+     *
+     * @param string|int  $build
+     * @param string|null $jobName  needed when first parameter is the build number
+     * @return object|null
+     * @throws \Exception
+     */
+    public function getBuildData($build, $jobName = null)
+    {
+        $startTime = time();
+        // timeout in seconds
+        $timeout = 180;
+
+        if (!is_numeric($build)) {
+            $waiting = true;
+
+            while ($waiting && (time() - $startTime) < $timeout) {
+                $url = $this->baseUrl . parse_url($build, PHP_URL_PATH) . 'api/json';
+
+                $queueItem = json_decode($this->execute($url));
+                $waiting = !preg_match('/\$LeftItem$/', $queueItem->_class);
+
+                if ($waiting) {
+                    sleep(1);
+                }
+            }
+
+            $build = $queueItem->executable->number;
+            $jobName = $queueItem->task->name;
+        }
+
+        $building = true;
+
+        while ($building && (time() - $startTime) < $timeout) {
+            $buildData = json_decode($this->getApiData("$jobName#$build"));
+            $building = $buildData->building;
+
+            if ($building) {
+                sleep(5);
+            }
+        }
+
+        if ($building) {
+            throw new \Exception("The script for getting the build status timed out after waiting $timeout seconds for the build to finish.");
+        }
+
+        return $buildData;
     }
 
     /**
      * Returns data of the target provided by the API
      *
-     * @param string|null $target  job, @view or job@view
+     * @param string|null $target  job, @view or job#buildNr
      * @param string      $format  xml|json|python [optional]
      * @return mixed
      */
@@ -52,23 +104,19 @@ class JenkinsHelper
         $targetUrlPart = '';
 
         if ($target != null) {
-            $target = explode('@', $target);
-            $targetUrlPart = array();
+            if (($viewPos = strpos($target, '@')) !== false) {
+                $targetUrlPart .= sprintf('/view/%s', rawurlencode(substr($target, $viewPos)));
+            } else {
+                $target = explode('#', $target);
 
-            if (!empty($target[1])) {
-                $targetUrlPart[] = 'view';
-                $targetUrlPart[] = rawurlencode($target[1]);
+                $target[0] = rawurlencode($target[0]);
+                $target = implode('/', $target);
+
+                $targetUrlPart .= sprintf('/job/%s', $target);
             }
-
-            if (!empty($target[0])) {
-                $targetUrlPart[] = 'job';
-                $targetUrlPart[] = rawurlencode($target[0]);
-            }
-
-            $targetUrlPart = implode('/', $targetUrlPart);
         }
 
-        $url = "$this->baseUrl/$targetUrlPart/api/$format";
+        $url = "{$this->baseUrl}{$targetUrlPart}/api/$format";
 
         return $this->execute($url);
     }
@@ -98,13 +146,11 @@ class JenkinsHelper
                     $errorMsg = 'Jenkins connection failed';
                     break;
                 default:
-                    $errorMsg = curl_error($this->curlHandler);
+                    $errorMsg = 'Curl error: ' . curl_error($this->curlHandler);
             }
 
             throw new \Exception($errorMsg, $curlError);
         }
-
-        curl_close($this->curlHandler);
 
         return $response;
     }
