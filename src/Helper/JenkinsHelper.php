@@ -4,10 +4,14 @@ namespace JenkinsAPI\Helper;
 
 use JenkinsAPI\Exception\JenkinsException;
 
+/**
+ * This class is a helper class for using the Jenkins API
+ */
 class JenkinsHelper
 {
     private $baseUrl;
     private $curlHandler;
+    private $responseHeaders = array();
 
     public function __construct($jenkinsUrl, $user = null, $password = null)
     {
@@ -30,16 +34,29 @@ class JenkinsHelper
      * This function runs the job specified
      *
      * @param string $jobName
-     * @return string
      */
     public function build($jobName)
     {
         $url = sprintf('%s/job/%s/build', $this->baseUrl, rawurlencode($jobName));
 
         curl_setopt($this->curlHandler, CURLOPT_POST, true);
-        curl_setopt($this->curlHandler, CURLOPT_HEADER, true);
+        curl_setopt($this->curlHandler, CURLOPT_HEADERFUNCTION, function($ch, $header) {
+            $len = strlen($header);
+            $header = explode(':', $header, 2);
 
-        return $this->execute($url);
+            // ignore invalid headers (without value)
+            if (count($header) < 2) {
+                return $len;
+            }
+
+            $key = strtolower($header[0]);
+            $this->responseHeaders[$key] = trim($header[1]);
+
+            // the header function should return the header length
+            return $len;
+        });
+
+        $this->execute($url);
     }
 
     /**
@@ -122,6 +139,21 @@ class JenkinsHelper
     }
 
     /**
+     * Getter for the curl response headers
+     *
+     * @param string $key
+     * @return string|null
+     */
+    public function getResponseHeader($key)
+    {
+        if (array_key_exists($key, $this->responseHeaders)) {
+            return $this->responseHeaders[$key];
+        } else {
+            return null;
+        }
+    }
+
+    /**
      * An internal helper function for executing the curl
      *
      * @param string $url
@@ -146,7 +178,7 @@ class JenkinsHelper
                     $errorMsg = 'Jenkins connection failed';
                     break;
                 default:
-                    $errorMsg = 'Curl error: ' . curl_error($this->curlHandler);
+                    $errorMsg = curl_error($this->curlHandler);
             }
 
             throw new \Exception($errorMsg, $curlError);
