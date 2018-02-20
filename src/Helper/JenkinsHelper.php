@@ -87,6 +87,14 @@ class JenkinsHelper
                 }
             }
 
+            if ($waiting) {
+                throw new \Exception("The script for getting the build status timed out after waiting $timeout seconds for the build to leave the queue.");
+            }
+
+            if ($queueItem->cancelled) {
+                throw new \Exception('The build got already canceled while waiting in the queue.');
+            }
+
             $build = $queueItem->executable->number;
             $jobName = $queueItem->task->name;
         }
