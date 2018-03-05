@@ -73,6 +73,9 @@ class JenkinsHelper
         // timeout in seconds
         $timeout = 180;
 
+        // deactivate the default output buffer
+        ob_end_flush();
+
         if (!is_numeric($build)) {
             $waiting = true;
 
@@ -83,6 +86,10 @@ class JenkinsHelper
                 $waiting = !preg_match('/\$LeftItem$/', $queueItem->_class);
 
                 if ($waiting) {
+                    // send a response to the server once in a while, so it doesn't time out
+                    echo " ";
+                    flush();
+
                     sleep(1);
                 }
             }
@@ -106,6 +113,9 @@ class JenkinsHelper
             $building = $buildData->building;
 
             if ($building) {
+                echo " ";
+                flush();
+
                 sleep(5);
             }
         }
