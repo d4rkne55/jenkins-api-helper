@@ -13,7 +13,13 @@ class JenkinsHelper
     private $curlHandler;
     private $responseHeaders = array();
 
-    public function __construct($jenkinsUrl, $user = null, $password = null)
+    /**
+     * @param string      $jenkinsUrl
+     * @param string|null $user
+     * @param string|null $password
+     * @param bool        $certificateCheck
+     */
+    public function __construct($jenkinsUrl, $user = null, $password = null, $certificateCheck = true)
     {
         if (!empty($user) && $password) {
             $jenkinsUrl = str_replace('//', "//$user:$password@", $jenkinsUrl);
@@ -23,17 +29,20 @@ class JenkinsHelper
 
         $ch = curl_init();
 
-        // needed for self-signed HTTPS/SSL certificates,
-        // else the default check of curl doesn't pass
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        if (!$certificateCheck) {
+            // needed for self-signed HTTPS/SSL certificates,
+            // else the default check of curl doesn't pass
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        }
 
         $this->curlHandler = $ch;
     }
 
     /**
-     * This function runs the job specified
+     * This function launches the job specified
      *
      * @param string $jobName
+     * @throws \Exception
      */
     public function build($jobName)
     {
@@ -60,18 +69,19 @@ class JenkinsHelper
     }
 
     /**
-     * Returns data of the build with given number or being referenced by given queue item URL
+     * Waits for the build to finish and returns data of the build
+     * with given number or being referenced by given queue item URL
      *
-     * @param string|int  $build
+     * @param string|int  $build    either queue item URL (string) or build number (int)
      * @param string|null $jobName  needed when first parameter is the build number
+     * @param int         $timeout
+     *
      * @return object|null
      * @throws \Exception
      */
-    public function getBuildData($build, $jobName = null)
+    public function getBuildData($build, $jobName = null, $timeout = 180)
     {
         $startTime = time();
-        // timeout in seconds
-        $timeout = 180;
 
         // deactivate the default output buffer
         ob_end_flush();
@@ -86,7 +96,7 @@ class JenkinsHelper
                 $waiting = !preg_match('/\$LeftItem$/', $queueItem->_class);
 
                 if ($waiting) {
-                    // send a response to the server once in a while, so it doesn't time out
+                    // send a response to the webserver once in a while, so it doesn't time out
                     echo " ";
                     flush();
 
@@ -107,6 +117,7 @@ class JenkinsHelper
         }
 
         $building = true;
+        $buildData = null;
 
         while ($building && (time() - $startTime) < $timeout) {
             $buildData = json_decode($this->getApiData("$jobName#$build"));
@@ -133,6 +144,7 @@ class JenkinsHelper
      * @param string|null $target  job, @view or job#buildNr
      * @param string      $format  xml|json|python [optional]
      * @return mixed
+     * @throws \Exception
      */
     public function getApiData($target = null, $format = 'json')
     {

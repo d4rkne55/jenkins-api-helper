@@ -4,17 +4,17 @@ namespace JenkinsAPI\Exception;
 
 class JenkinsException extends \RuntimeException
 {
-    public function __construct($reponse, $code = 0)
+    public function __construct($response, $code = 0)
     {
         $message = '';
 
-        if (!empty($reponse)) {
+        if (!empty($response)) {
             // 'disable' libxml error handling
             // throws warnings for malformed HTML otherwise
             libxml_use_internal_errors(true);
 
             $dom = new \DOMDocument();
-            $dom->loadHTML($reponse);
+            $dom->loadHTML($response);
             $xPath = new \DOMXPath($dom);
 
             $errorMsgElem = $xPath->query('body/p');
