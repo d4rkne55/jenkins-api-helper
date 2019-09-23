@@ -1,6 +1,6 @@
 # jenkins-api-helper
 
-For one project I built in my company I wanted to trigger jobs in Jenkins
+For one project I built in the company I wanted to trigger jobs in Jenkins
 from within the webapp. I created this class as a helper/wrapper to abstract away
 all the handling when using the Jenkins REST API.  
 It's pretty tailored to my use cases because of that, though.
@@ -23,6 +23,9 @@ or, if you use Basic Authentification
 ```php
 $jenkins = new JenkinsHelper('https://jenkins-domain.tld', 'user', 'password');
 ```
+Note: If your Jenkins server has self-signed SSL certificates (was the case for me)
+you can (and need to) pass `false` as the 4th parameter to disable
+the default certificate check cURL is doing.
 
 Then you can build/launch a job
 ```php
